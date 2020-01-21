@@ -83,7 +83,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val addNewChat =
-    (path("addNewChat") & post) {
+    (path("chat") & post) {
       AuthorizationService.authenticate() { (username, _, _) =>
         entity(as[ChatRequest]) {
           case ChatRequest(name, users) =>
@@ -106,7 +106,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val addUsersToChat =
-    (path("addUsersToChat") & post) {
+    (path("chat" / "addUsers") & put) {
       AuthorizationService.authenticate() { (username, _, _) =>
         entity(as[UsersToChatRequest]) {
           case UsersToChatRequest(chatId, users) =>
@@ -127,8 +127,20 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
+  val getUsernamesByPrefix =
+    (pathPrefix("user" / "getUsernamesByPrefix") & get) {
+      AuthorizationService.authenticate() { (_, _, _) =>
+        (path(Segment) | parameter('usernamePrefix)) { usernamePrefix =>
+          val usersFuture = (DatabaseService.usersActor ? GetUsersByPrefix(usernamePrefix))
+            .mapTo[List[User]]
+            .map(_.map(_.username))
+          complete(usersFuture)
+        }
+      }
+    }
+
   val getAllMessages =
-    (path("getAllMessages") & get) {
+    (path("message") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
         val messagesFuture = (DatabaseService.messagesActor ? GetAllMessages(username))
           .mapTo[List[Message]]
@@ -169,6 +181,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     openRoute ~
     addNewChat ~
     addUsersToChat ~
+    getUsernamesByPrefix ~
     getAllMessages ~
     setFutureHandlingConfiguration ~
     createWSConnection

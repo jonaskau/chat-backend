@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Chat.iml" filepath="$PROJECT_DIR$/.idea/modules/Chat.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/chat-build.iml" filepath="$PROJECT_DIR$/.idea/modules/chat-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/backend-build.iml" filepath="$PROJECT_DIR$/.idea/modules/backend-build.iml" />
     </modules>
   </component>
 </project>

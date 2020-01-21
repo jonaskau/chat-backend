@@ -13,6 +13,7 @@ case class User(_id: ObjectId, username: String, password: String, scope: String
 
 object UsersActor {
   case class GetUserByUsername(username: String)
+  case class GetUsersByPrefix(usernamePrefix: String)
   case class ExtractActualUsernames(username: List[String])
   case class InsertUser(username: String, password: String)
 }
@@ -30,6 +31,10 @@ class UsersActor extends Actor{
       val senderRef = sender()
       val userOptionFuture = usersCollection.find(equal("username", username)).headOption()
       futureHandler.GetOption[User](userOptionFuture, senderRef ! _)
+    case GetUsersByPrefix(usernamePrefix) =>
+      val senderRef = sender()
+      val usersFuture = usersCollection.find(regex("username", usernamePrefix)).toFuture()
+      futureHandler.GetSeq[User](usersFuture, senderRef ! _)
     case ExtractActualUsernames(usernameList) =>
       val senderRef = sender()
       val usersFuture = usersCollection.find(in("username", usernameList:_*)).toFuture()
