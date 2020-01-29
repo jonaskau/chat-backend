@@ -2,9 +2,9 @@ package chatroom
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.headers.RawHeader
-import akka.http.scaladsl.server.Directives
+import akka.http.scaladsl.server.{Directives, ExceptionHandler, RejectionHandler}
 import akka.pattern.ask
 import chatroom.chat.ChatRoomsAndConnections
 import chatroom.database.FutureHandler.Blocking
@@ -24,10 +24,6 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   implicit val chatRequestFormat: RootJsonFormat[ChatRequest] =
     jsonFormat2(ChatRequest)
 
-  case class MessageResponse(chatId: String, date: Long, author: String, message: String)
-  implicit val messageResponseFormat: RootJsonFormat[MessageResponse] =
-    jsonFormat4(MessageResponse)
-
   case class UsersToChatRequest(chatId: String, users: List[String])
   implicit val UsersToChatRequestFormat: RootJsonFormat[UsersToChatRequest] =
     jsonFormat2(UsersToChatRequest)
@@ -35,6 +31,22 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   case class FutureHandlingConfiguration(users: Boolean, chats: Boolean, messages: Boolean)
   implicit val futureHandlingConfigurationFormat: RootJsonFormat[FutureHandlingConfiguration] =
     jsonFormat3(FutureHandlingConfiguration)
+
+  case class MessageResponse(chatId: String, chatName: String, date: Long, author: String, message: String)
+  implicit val messageResponseFormat: RootJsonFormat[MessageResponse] =
+    jsonFormat5(MessageResponse)
+
+  case class ChatNameResponse(chatName: String)
+  implicit val chatNameResponseFormat: RootJsonFormat[ChatNameResponse] =
+    jsonFormat1(ChatNameResponse)
+
+  case class TokenResponse(token: String, expiresIn: Int)
+  implicit val tokenResponseFormat: RootJsonFormat[TokenResponse] =
+    jsonFormat2(TokenResponse)
+
+  case class UsernameAvailableResponse(available: Boolean)
+  implicit val usernameAvailableResponseFormat: RootJsonFormat[UsernameAvailableResponse] =
+    jsonFormat1(UsernameAvailableResponse)
 }
 object Server extends App with CustomJsonProtocol with SprayJsonSupport {
 
@@ -43,42 +55,44 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
   import chatroom.database.ChatsActor._
   import chatroom.database.MessagesActor._
   import chatroom.database.UsersActor._
-
   import scala.concurrent.ExecutionContext.Implicits.global
+  import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 
   val config = actorSystem.settings.config
   val interface = config.getString("app.interface")
   val port = config.getInt("app.port")
 
-  val openRoute =
-    post {
-      path("login") {
-        entity(as[CredentialsRequest]) {
-          case CredentialsRequest(username, password) =>
-            val tokenOptionFuture = AuthorizationService.login(username, password, DatabaseService.usersActor)
-            onSuccess(tokenOptionFuture) {
-              case Some(token) =>
-                respondWithHeader(RawHeader("Access-Token", token)) {
-                  complete(StatusCodes.OK)
-                }
-              case _ => complete(StatusCodes.Unauthorized)
-            }
-          case _ => complete(StatusCodes.Unauthorized)
-        }
-      } ~
-      path("signup") {
-        entity(as[CredentialsRequest]) {
-          case CredentialsRequest(username, password) =>
-            val tokenOptionFuture = AuthorizationService.signUp(username, password, DatabaseService.usersActor)
-            onSuccess(tokenOptionFuture) {
-              case Some(token) =>
-                respondWithHeader(RawHeader("Access-Token", token)) {
-                  complete(StatusCodes.OK)
-                }
-              case _ => complete(StatusCodes.Conflict)
-            }
-          case _ => complete(StatusCodes.BadRequest)
-        }
+  val rejectionHandler = corsRejectionHandler.withFallback(RejectionHandler.default)
+  val exceptionHandler = ExceptionHandler {
+    case e: NoSuchElementException => complete(StatusCodes.NotFound -> e.getMessage)
+  }
+  val handleErrors = handleRejections(rejectionHandler) & handleExceptions(exceptionHandler)
+
+  val signUp =
+    (path("user" / "signup") & post) {
+      entity(as[CredentialsRequest]) {
+        case CredentialsRequest(username, password) =>
+          val tokenOptionFuture = AuthorizationService.signUp(username, password, DatabaseService.usersActor)
+          onSuccess(tokenOptionFuture) {
+            case Some(token) =>
+              complete(TokenResponse(token, AuthorizationService.expirationPeriodInMinutes))
+            case _ => complete(StatusCodes.Conflict)
+          }
+        case _ => complete(StatusCodes.BadRequest)
+      }
+    }
+
+  val login =
+    (path("user" / "login") & post) {
+      entity(as[CredentialsRequest]) {
+        case CredentialsRequest(username, password) =>
+          val tokenOptionFuture = AuthorizationService.login(username, password, DatabaseService.usersActor)
+          onSuccess(tokenOptionFuture) {
+            case Some(token) =>
+              complete(TokenResponse(token, AuthorizationService.expirationPeriodInMinutes))
+            case _ => complete(StatusCodes.Unauthorized)
+          }
+        case _ => complete(StatusCodes.Unauthorized)
       }
     }
 
@@ -139,15 +153,47 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
+  val usernameAvailable =
+    (pathPrefix("user" / "usernameAvailable") & get) {
+      (path(Segment) | parameter('username)) { username =>
+        val userFuture = (DatabaseService.usersActor ? GetUserByUsername(username))
+          .mapTo[Option[User]]
+        onSuccess(userFuture) {
+          case None =>
+            complete(UsernameAvailableResponse(true))
+          case Some(_) =>
+            complete(UsernameAvailableResponse(false))
+        }
+      }
+    }
+
   val getAllMessages =
     (path("message") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
         val messagesFuture = (DatabaseService.messagesActor ? GetAllMessages(username))
           .mapTo[List[Message]]
           .map(_.map(message => {
-            MessageResponse(message.chatId.toHexString, message.date, message.author, message.message)
+            MessageResponse(
+              message.chatId.toHexString,
+              ChatRoomsAndConnections.GetChatNameById(message.chatId.toHexString),
+              message.date,
+              message.author,
+              message.message)
           }))
         complete(messagesFuture)
+      }
+    }
+
+  val getChatNameById =
+    (pathPrefix("chat" / "getChatNameById") & get) {
+      AuthorizationService.authenticate() { (username, _, _) =>
+        (path(Segment) | parameter('id)) { chatId =>
+          val name = ChatRoomsAndConnections.GetChatNameByIdIfUsernameIsInside(chatId, username)
+          if (name != null)
+            complete(ChatNameResponse(name))
+          else
+            complete(StatusCodes.Unauthorized)
+        }
       }
     }
 
@@ -177,17 +223,26 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
 
   ChatRoomsAndConnections.GetChatRoomsFromDB(DatabaseService.chatsActor)
   DatabaseService.messagesActor ! Blocking(false)
+
   val route =
-    openRoute ~
-    addNewChat ~
-    addUsersToChat ~
-    getUsernamesByPrefix ~
-    getAllMessages ~
-    setFutureHandlingConfiguration ~
-    createWSConnection
+    handleErrors {
+      cors() {
+        signUp ~
+        login ~
+        addNewChat ~
+        addUsersToChat ~
+        getUsernamesByPrefix ~
+        usernameAvailable ~
+        getAllMessages ~
+        getChatNameById ~
+        setFutureHandlingConfiguration ~
+        createWSConnection
+      }
+    }
   val bindingFuture = Http().bindAndHandle(route, interface, port)
   println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
   StdIn.readLine() // let it run until user presses return
   bindingFuture
     .flatMap(_.unbind()) // trigger unbinding from the port
+    .onComplete(_ => sys.exit())
 }

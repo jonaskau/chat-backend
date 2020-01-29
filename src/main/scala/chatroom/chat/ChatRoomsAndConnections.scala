@@ -16,7 +16,7 @@ object ChatRoomsAndConnections {
 
   implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
 
-  case class ChatRoom(var usernameList: List[String], chatRoomActor: ActorRef)
+  case class ChatRoom(name: String, var usernameList: List[String], chatRoomActor: ActorRef)
 
   private var ChatRoomMap: Map[String, ChatRoom] = Map.empty[String, ChatRoom]
   private var ConnectionMap: Map[String, Connection] = Map.empty[String, Connection]
@@ -26,7 +26,7 @@ object ChatRoomsAndConnections {
     chatListFuture.onComplete{
       case Success(chatList) =>
         ChatRoomMap = chatList
-          .map(chat => chat._id.toHexString -> ChatRoom(chat.users, actorSystem.actorOf(Props(new ChatRoomActor(chat._id.toHexString)), chat._id.toHexString))).toMap
+          .map(chat => chat._id.toHexString -> ChatRoom(chat.name, chat.users, actorSystem.actorOf(Props(new ChatRoomActor(chat._id.toHexString)), chat._id.toHexString))).toMap
         printChatRoomList()
       case Failure(exception) => println(exception)
     }
@@ -43,13 +43,24 @@ object ChatRoomsAndConnections {
     connection
   }
 
+  def GetChatNameById(chatId: String): String = {
+    ChatRoomMap(chatId).name
+  }
+
+  def GetChatNameByIdIfUsernameIsInside(chatId: String, username: String): String = {
+    if (ChatRoomMap(chatId).usernameList.contains(username))
+      ChatRoomMap(chatId).name
+    else
+      null
+  }
+
   def removeConnection(username: String): Unit = {
     ChatRoomMap -= username
   }
 
   def insertChatRoom(chat: Chat)(implicit actorSystem: ActorSystem): Unit = {
     val chatRoomActor = actorSystem.actorOf(Props(new ChatRoomActor(chat._id.toHexString)), chat._id.toHexString)
-    ChatRoomMap += chat._id.toHexString -> ChatRoom(chat.users, chatRoomActor)
+    ChatRoomMap += chat._id.toHexString -> ChatRoom(chat.name, chat.users, chatRoomActor)
     addChatRoomActorsToConnections(chat.users, chat._id.toHexString, chatRoomActor)
     printChatRoomList()
   }
@@ -72,6 +83,6 @@ object ChatRoomsAndConnections {
   def printChatRoomList(): Unit = {
     val size = ChatRoomMap.size
     println(s"ChatRoomList: $size entries")
-    ChatRoomMap.foreach(chatroom => println(chatroom._1, chatroom._2.usernameList, chatroom._2.chatRoomActor.path))
+    ChatRoomMap.foreach(chatRoom => println(chatRoom._1, chatRoom._2.usernameList, chatRoom._2.chatRoomActor.path))
   }
 }

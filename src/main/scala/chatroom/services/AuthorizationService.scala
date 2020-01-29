@@ -19,6 +19,7 @@ object AuthorizationService {
   val salt = "my-salt-text"
   val algorithm: JwtAlgorithm.HS256.type = JwtAlgorithm.HS256
   val secretKey = "chatroomsecret"
+  val expirationPeriodInMinutes = 60
 
   import Directives._
   import chatroom.database.UsersActor._
@@ -46,7 +47,7 @@ object AuthorizationService {
     val hash = generateHash(password)
     val userInsertedFuture = (usersActor ? InsertUser(username, hash)).mapTo[Boolean]
     userInsertedFuture.map[Option[String]] {
-      case true => Some(createToken(1, username, "basic"))
+      case true => Some(createToken(expirationPeriodInMinutes, username, "basic"))
       case false => None
     }
   }
@@ -56,7 +57,7 @@ object AuthorizationService {
     userOptionFuture.map[Option[String]] {
       case Some(user) =>
         if (user.password.equals(generateHash(password)))
-          Some(createToken(1, username, user.scope))
+          Some(createToken(expirationPeriodInMinutes, username, user.scope))
         else
           None
       case None =>
@@ -69,9 +70,9 @@ object AuthorizationService {
     md.digest((salt + password).getBytes("UTF-8")).map("%02x".format(_)).mkString
   }
 
-  def createToken(expirationPeriodInDays: Int, username: String, scope: String): String = {
+  def createToken(expirationPeriodInMinutes: Int, username: String, scope: String): String = {
     val claims = JwtClaim(
-      expiration = Some(System.currentTimeMillis() / 1000 + TimeUnit.DAYS.toSeconds(expirationPeriodInDays)),
+      expiration = Some(System.currentTimeMillis() / 1000 + TimeUnit.MINUTES.toSeconds(expirationPeriodInMinutes)),
       issuedAt = Some(System.currentTimeMillis() / 1000),
       issuer = Some(username),
       subject = Some(scope)
