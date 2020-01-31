@@ -4,6 +4,17 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream.{FlowShape, OverflowStrategy}
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Sink, Source}
+import spray.json.{DefaultJsonProtocol, RootJsonFormat}
+
+object ConnectionJsonProtocol extends DefaultJsonProtocol {
+  import chatroom.chat.ConnectionActor.SendIncomingMessage
+  implicit val SendIncomingMessageFormat: RootJsonFormat[SendIncomingMessage] =
+    jsonFormat3(SendIncomingMessage)
+
+  import chatroom.chat.ChatRoomActor.OutgoingMessage
+  implicit val OutgoingMessageFormat: RootJsonFormat[OutgoingMessage] =
+    jsonFormat3(OutgoingMessage)
+}
 
 object Connection {
   def apply(username: String)(implicit actorSystem: ActorSystem) =
@@ -12,6 +23,9 @@ object Connection {
 class Connection(val username: String, actorSystem: ActorSystem) {
   import ChatRoomActor._
   import ConnectionActor._
+  import ConnectionJsonProtocol._
+  import spray.json._
+
   private val connectionActor = actorSystem.actorOf(Props[ConnectionActor], username)
 
   def websocketFlow(): Flow[Message, Message, _] = {
@@ -21,12 +35,12 @@ class Connection(val username: String, actorSystem: ActorSystem) {
 
         val fromWebsocket = builder.add(
           Flow[Message].collect {
-            case TextMessage.Strict(txt) => SendIncomingMessage(txt.slice(0, 24), username, txt.slice(24, txt.length))
+            case TextMessage.Strict(txt) => txt.parseJson.convertTo[SendIncomingMessage]
           })
 
         val backToWebsocket = builder.add(
           Flow[OutgoingMessage].map {
-            case OutgoingMessage(chatId, author, text) => TextMessage(s"$chatId[$author]: $text")
+            om: OutgoingMessage => TextMessage(om.toJson.compactPrint)
           }
         )
 

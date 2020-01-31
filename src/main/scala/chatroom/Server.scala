@@ -2,8 +2,7 @@ package chatroom
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
-import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.{StatusCodes}
 import akka.http.scaladsl.server.{Directives, ExceptionHandler, RejectionHandler}
 import akka.pattern.ask
 import chatroom.chat.ChatRoomsAndConnections

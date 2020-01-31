@@ -16,7 +16,7 @@ object ChatRoomActor {
   case class UserOnline(username: String, userActor: ActorRef) extends ChatEvent
   case class UserOffline(username: String) extends ChatEvent
   case class IncomingMessage(sender: String, message: String) extends ChatEvent
-  case class OutgoingMessage(chatId: String, sender: String, message: String)
+  case class OutgoingMessage(chatId: String, author: String, message: String)
 }
 class ChatRoomActor(chatId: String) extends Actor {
   import ChatRoomActor._
