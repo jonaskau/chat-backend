@@ -27,6 +27,7 @@ class ConnectionActor extends Actor{
       userActorRef = userActor
       chatRoomActors.foreach(_._2 ! UserOnline(username, userActor))
     case SendUserOffline(username) =>
+      println(username)
       chatRoomActors.foreach(_._2 ! UserOffline(username))
       ChatRoomsAndConnections.removeConnection(username)
       self ! PoisonPill
