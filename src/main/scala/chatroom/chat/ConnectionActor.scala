@@ -6,8 +6,8 @@ object ConnectionActor {
   sealed trait ConnectionEvent
   case class AddChatRoomActor(chatId: String, chatRoomActor: ActorRef) extends ConnectionEvent
   case class AddChatRoomActorAndSendUserOnline(username: String, chatId: String, chatRoomActor: ActorRef) extends ConnectionEvent
-  case class SendUserOnline(username: String, userActor: ActorRef) extends ConnectionEvent
-  case class SendUserOffline(username: String) extends ConnectionEvent
+  case class SendUserOnline(username: String, accountConnectionNumber: Int, userActor: ActorRef) extends ConnectionEvent
+  case class SendUserOffline(username: String, accountConnectionNumber: Int) extends ConnectionEvent
   case class SendIncomingMessage(chatId: String, author: String, message: String) extends ConnectionEvent
 }
 class ConnectionActor extends Actor{
@@ -15,22 +15,25 @@ class ConnectionActor extends Actor{
   import ConnectionActor._
 
   var chatRoomActors: Map[String, ActorRef] = Map.empty[String, ActorRef]
-  var userActorRef: ActorRef = _
+  var userActors: Map[Int, ActorRef] = Map.empty[Int, ActorRef] //map
 
   override def receive: Receive = {
     case AddChatRoomActor(chatId, chatRoomActor) =>
       chatRoomActors += chatId -> chatRoomActor
     case AddChatRoomActorAndSendUserOnline(username, chatId, chatRoomActor) =>
       chatRoomActors += chatId -> chatRoomActor
-      chatRoomActors(chatId) ! UserOnline(username, userActorRef)
-    case SendUserOnline(username, userActor) =>
-      userActorRef = userActor
-      chatRoomActors.foreach(_._2 ! UserOnline(username, userActor))
-    case SendUserOffline(username) =>
-      println(username)
-      chatRoomActors.foreach(_._2 ! UserOffline(username))
-      ChatRoomsAndConnections.removeConnection(username)
-      self ! PoisonPill
+      userActors.foreach(userActor => {
+        chatRoomActors(chatId) ! UserOnline(username, userActor._1, userActor._2)
+      })
+    case SendUserOnline(username, accountConnectionNumber, userActor) =>
+      userActors += accountConnectionNumber -> userActor
+      chatRoomActors.values.foreach(_ ! UserOnline(username, accountConnectionNumber, userActor))
+    case SendUserOffline(username, accountConnectionNumber) =>
+      chatRoomActors.values.foreach(_ ! UserOffline(username, accountConnectionNumber))
+      if (userActors.isEmpty) {
+        ChatRoomsAndConnections.removeConnection(username)
+        self ! PoisonPill
+      }
     case SendIncomingMessage(chatId, sender, message) =>
       chatRoomActors(chatId) ! IncomingMessage(sender, message)
   }

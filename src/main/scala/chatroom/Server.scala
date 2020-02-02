@@ -215,7 +215,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
   val createWSConnection =
     (path("createWSConnection") & get) {
       AuthorizationService.authenticate("Sec-WebSocket-Protocol") { (username, _, token) =>
-        val handler = ChatRoomsAndConnections.createConnection(username).websocketFlow()
+        val handler = ChatRoomsAndConnections.createOrGetConnection(username).websocketFlow()
         handleWebSocketMessagesForProtocol(handler, token)
       }
     }

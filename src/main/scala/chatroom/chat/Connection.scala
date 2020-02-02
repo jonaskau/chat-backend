@@ -27,8 +27,10 @@ class Connection(val username: String, actorSystem: ActorSystem) {
   import spray.json._
 
   private val connectionActor = actorSystem.actorOf(Props[ConnectionActor], username)
+  private var accountConnectionNumber = -1
 
   def websocketFlow(): Flow[Message, Message, _] = {
+    accountConnectionNumber += 1
     Flow.fromGraph(GraphDSL.create(Source.actorRef[OutgoingMessage](bufferSize = 5, OverflowStrategy.fail)) {
       implicit builder => chatSource =>
         import GraphDSL.Implicits._
@@ -44,9 +46,9 @@ class Connection(val username: String, actorSystem: ActorSystem) {
           }
         )
 
-        val actorAsSource = builder.materializedValue.map(actor => SendUserOnline(username, actor))
+        val actorAsSource = builder.materializedValue.map(actor => SendUserOnline(username, accountConnectionNumber, actor))
 
-        val chatActorSink = Sink.actorRef[ConnectionEvent](connectionActor, SendUserOffline(username))
+        val chatActorSink = Sink.actorRef[ConnectionEvent](connectionActor, SendUserOffline(username, accountConnectionNumber))
 
         val merge = builder.add(Merge[ConnectionEvent](2))
 

@@ -32,7 +32,10 @@ object ChatRoomsAndConnections {
     }
   }
 
-  def createConnection(username: String)(implicit actorSystem: ActorSystem): Connection = {
+  def createOrGetConnection(username: String)(implicit actorSystem: ActorSystem): Connection = {
+    if (ConnectionMap.contains(username)) {
+      return ConnectionMap(username)
+    }
     val connection = Connection(username)
     ChatRoomMap.foreach(chatRoom => {
       if (chatRoom._2.usernameList.contains(username)) {
