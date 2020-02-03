@@ -37,7 +37,7 @@ class Connection(val username: String, actorSystem: ActorSystem) {
 
         val fromWebsocket = builder.add(
           Flow[Message].collect {
-            case TextMessage.Strict(txt) => txt.parseJson.convertTo[SendIncomingMessage]
+            case TextMessage.Strict(txt) => txt.parseJson.convertTo[SendIncomingMessage] //check message
           })
 
         val backToWebsocket = builder.add(
