@@ -38,13 +38,17 @@ class ChatRoomActor(chatId: String) extends Actor {
         broadcast("System", s"$username: offline")
       }
     case IncomingMessage(sender, message) =>
-      val insertedFuture = (DatabaseService.messagesActor ? InsertMessage(new ObjectId(chatId), sender, message)).mapTo[Boolean]
-      insertedFuture.onComplete {
-        case Success(inserted) =>
-          if (inserted) broadcast(sender, message)
-          else println("couldnt save message to DB")
-        case Failure(_) => println("couldnt save message to DB")
-      }
+      saveAndSendMessage(sender, message)
+  }
+
+  def saveAndSendMessage(sender: String, message: String): Unit = {
+    val insertedFuture = (DatabaseService.messagesActor ? InsertMessage(new ObjectId(chatId), sender, message)).mapTo[Boolean]
+    insertedFuture.onComplete {
+      case Success(inserted) =>
+        if (inserted) broadcast(sender, message)
+        else println("couldnt save message to DB")
+      case Failure(_) => println("couldnt save message to DB")
+    }
   }
 
   def broadcast(sender: String, message: String): Unit = {

@@ -2,7 +2,7 @@ package chatroom
 
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.{StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directives, ExceptionHandler, RejectionHandler}
 import akka.pattern.ask
 import chatroom.chat.ChatRoomsAndConnections
@@ -27,13 +27,21 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   implicit val UsersToChatRequestFormat: RootJsonFormat[UsersToChatRequest] =
     jsonFormat2(UsersToChatRequest)
 
+  case class GetMessagesRequest(chatId: String, amount: Int, untilDate: Long)
+  implicit  val GetMessageRequestFormat: RootJsonFormat[GetMessagesRequest] =
+    jsonFormat3(GetMessagesRequest)
+
+  case class ChatMessagesResponse(date: Long, author: String, message: String)
+  implicit  val ChatMessagesResponseFormat: RootJsonFormat[ChatMessagesResponse] =
+    jsonFormat3(ChatMessagesResponse)
+
   case class FutureHandlingConfiguration(users: Boolean, chats: Boolean, messages: Boolean)
   implicit val futureHandlingConfigurationFormat: RootJsonFormat[FutureHandlingConfiguration] =
     jsonFormat3(FutureHandlingConfiguration)
 
-  case class MessageResponse(chatId: String, chatName: String, date: Long, author: String, message: String)
-  implicit val messageResponseFormat: RootJsonFormat[MessageResponse] =
-    jsonFormat5(MessageResponse)
+  case class ChatsResponse(id: String, name: String, users: List[String], messages: List[String])
+  implicit val chatsResponseFormat: RootJsonFormat[ChatsResponse] =
+    jsonFormat4(ChatsResponse)
 
   case class ChatNameResponse(chatName: String)
   implicit val chatNameResponseFormat: RootJsonFormat[ChatNameResponse] =
@@ -68,7 +76,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
   val handleErrors = handleRejections(rejectionHandler) & handleExceptions(exceptionHandler)
 
   val signUp =
-    (path("user" / "signup") & post) {
+    (path("users" / "signup") & post) {
       entity(as[CredentialsRequest]) {
         case CredentialsRequest(username, password) =>
           val tokenOptionFuture = AuthorizationService.signUp(username, password, DatabaseService.usersActor)
@@ -82,7 +90,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val login =
-    (path("user" / "login") & post) {
+    (path("users" / "login") & post) {
       entity(as[CredentialsRequest]) {
         case CredentialsRequest(username, password) =>
           val tokenOptionFuture = AuthorizationService.login(username, password, DatabaseService.usersActor)
@@ -96,7 +104,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val addNewChat =
-    (path("chat") & post) {
+    (path("chats") & post) {
       AuthorizationService.authenticate() { (username, _, _) =>
         entity(as[ChatRequest]) {
           case ChatRequest(name, users) =>
@@ -119,7 +127,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val addUsersToChat =
-    (path("chat" / "addUsers") & put) {
+    (path("chats" / "addUsers") & put) {
       AuthorizationService.authenticate() { (username, _, _) =>
         entity(as[UsersToChatRequest]) {
           case UsersToChatRequest(chatId, users) =>
@@ -141,7 +149,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val getUsernamesByPrefix =
-    (pathPrefix("user" / "getUsernamesByPrefix") & get) {
+    (pathPrefix("users" / "getUsernamesByPrefix") & get) {
       AuthorizationService.authenticate() { (_, _, _) =>
         (path(Segment) | parameter('usernamePrefix)) { usernamePrefix =>
           val usersFuture = (DatabaseService.usersActor ? GetUsersByPrefix(usernamePrefix))
@@ -153,7 +161,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     }
 
   val usernameAvailable =
-    (pathPrefix("user" / "usernameAvailable") & get) {
+    (pathPrefix("users" / "usernameAvailable") & get) {
       (path(Segment) | parameter('username)) { username =>
         val userFuture = (DatabaseService.usersActor ? GetUserByUsername(username))
           .mapTo[Option[User]]
@@ -166,25 +174,39 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
-  val getAllMessages =
-    (path("message") & get) {
+  val getChats =
+    (path("chats") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
-        val messagesFuture = (DatabaseService.messagesActor ? GetAllMessages(username))
-          .mapTo[List[Message]]
-          .map(_.map(message => {
-            MessageResponse(
-              message.chatId.toHexString,
-              ChatRoomsAndConnections.GetChatNameById(message.chatId.toHexString),
-              message.date,
-              message.author,
-              message.message)
+        val chatsFuture = (DatabaseService.chatsActor ? GetChatsForUsername(username))
+          .mapTo[List[Chat]]
+          .map(_.map(chat => {
+            ChatsResponse(chat._id.toHexString, chat.name, chat.users, List.empty[String])
           }))
-        complete(messagesFuture)
+        complete(chatsFuture)
+      }
+    }
+
+  val getMessages =
+    (path("messages" / "getBatch") & post) {
+      AuthorizationService.authenticate() { (username, _, _) =>
+        entity(as[GetMessagesRequest]) {
+          case GetMessagesRequest(chatId, amount, untilDate) =>
+            if (!ChatRoomsAndConnections.chatRoomContainsUsername(chatId, username)) {
+              complete(StatusCodes.Unauthorized)
+            }
+            val messageListFuture = (DatabaseService.messagesActor ? GetMessages(new ObjectId(chatId), amount, untilDate))
+              .mapTo[List[Message]]
+              .map(_.map(message => {
+                ChatMessagesResponse(message.date, message.author, message.message)
+              }))
+            complete(messageListFuture)
+          case _ => complete(StatusCodes.BadRequest)
+        }
       }
     }
 
   val getChatNameById =
-    (pathPrefix("chat" / "getChatNameById") & get) {
+    (pathPrefix("chats" / "getChatNameById") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
         (path(Segment) | parameter('id)) { chatId =>
           val name = ChatRoomsAndConnections.GetChatNameByIdIfUsernameIsInside(chatId, username)
@@ -232,7 +254,8 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
         addUsersToChat ~
         getUsernamesByPrefix ~
         usernameAvailable ~
-        getAllMessages ~
+        getMessages ~
+        getChats ~
         getChatNameById ~
         setFutureHandlingConfiguration ~
         createWSConnection

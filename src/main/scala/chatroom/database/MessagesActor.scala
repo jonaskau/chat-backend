@@ -13,11 +13,13 @@ object Message {
 case class Message(_id: ObjectId, chatId: ObjectId, date: Long, author: String, message: String)
 
 object MessagesActor {
-  case class GetAllMessages(username: String)
+  case class GetMessages(chatId: ObjectId, amount: Int, untilDate: Long)
   case class InsertMessage(chatId: ObjectId, author: String, message: String)
 }
 class MessagesActor extends Actor {
   import MessagesActor._
+  import org.mongodb.scala.model.Filters._
+  import org.mongodb.scala.model.Sorts._
 
   val messagesCollection: MongoCollection[Message] =
     DatabaseService.chatroomDB.getCollection("messages")
@@ -25,10 +27,14 @@ class MessagesActor extends Actor {
   override def receive: Receive = receiveMethod(FutureHandlerBlocking)
 
   def receiveMethod(futureHandler: FutureHandler): Receive = {
-    case GetAllMessages(username) =>
+    case GetMessages(chatId, amount, untilDate) =>
       val senderRef = sender()
-      val messagesOptionFuture = messagesCollection.find(equal("author", username)).toFuture()
-      futureHandler.GetSeq[Message](messagesOptionFuture, senderRef ! _)
+      val messagesFuture = messagesCollection
+        .find(and(equal("chatId", chatId), lt("date", untilDate)))
+        .sort(descending("date"))
+        .limit(amount)
+        .toFuture()
+      futureHandler.GetSeq[Message](messagesFuture, senderRef ! _)
     case InsertMessage(chatId, author, message) =>
       val senderRef = sender()
       val currentMessage = Message(chatId, author, message)

@@ -15,7 +15,7 @@ class ConnectionActor extends Actor{
   import ConnectionActor._
 
   var chatRoomActors: Map[String, ActorRef] = Map.empty[String, ActorRef]
-  var userActors: Map[Int, ActorRef] = Map.empty[Int, ActorRef] //map
+  var userActors: Map[Int, ActorRef] = Map.empty[Int, ActorRef]
 
   override def receive: Receive = {
     case AddChatRoomActor(chatId, chatRoomActor) =>

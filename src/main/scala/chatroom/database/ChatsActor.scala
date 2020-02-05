@@ -13,6 +13,7 @@ case class Chat(_id: ObjectId, name: String, users: List[String])
 
 object ChatsActor {
   case object GetAllChats
+  case class GetChatsForUsername(username: String)
   case class GetChatByName(name: String)
   case class InsertChat(chat: Chat)
   case class AddUsersToChat(username: String, chatId: ObjectId, users: List[String])
@@ -30,8 +31,12 @@ class ChatsActor extends Actor{
   def receiveMethod(futureHandler: FutureHandler): Receive = {
     case GetAllChats =>
       val senderRef = sender()
-      val chatsOptionFuture = chatsCollection.find().toFuture()
-      futureHandler.GetSeq[Chat](chatsOptionFuture, senderRef ! _)
+      val chatSeqFuture = chatsCollection.find().toFuture()
+      futureHandler.GetSeq[Chat](chatSeqFuture, senderRef ! _)
+    case GetChatsForUsername(username) =>
+      val senderRef = sender()
+      val chatSeqFuture = chatsCollection.find(all("users", List(username):_*)).toFuture()
+      futureHandler.GetSeq[Chat](chatSeqFuture, senderRef ! _)
     case GetChatByName(name) =>
       val senderRef = sender()
       val chatOptionFuture = chatsCollection.find(equal("name", name)).headOption()

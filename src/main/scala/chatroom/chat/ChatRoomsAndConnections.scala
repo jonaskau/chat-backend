@@ -50,8 +50,12 @@ object ChatRoomsAndConnections {
     ChatRoomMap(chatId).name
   }
 
+  def chatRoomContainsUsername(chatId: String, username: String): Boolean = {
+    ChatRoomMap(chatId).usernameList.contains(username)
+  }
+
   def GetChatNameByIdIfUsernameIsInside(chatId: String, username: String): String = {
-    if (ChatRoomMap(chatId).usernameList.contains(username))
+    if (chatRoomContainsUsername(chatId, username))
       ChatRoomMap(chatId).name
     else
       null
