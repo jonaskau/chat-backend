@@ -62,7 +62,8 @@ object ChatRoomsAndConnections {
   }
 
   def removeConnection(username: String): Unit = {
-    ChatRoomMap -= username
+    ConnectionMap -= username
+    printConnectionMap()
   }
 
   def insertChatRoom(chat: Chat)(implicit actorSystem: ActorSystem): Unit = {
@@ -91,5 +92,11 @@ object ChatRoomsAndConnections {
     val size = ChatRoomMap.size
     println(s"ChatRoomList: $size entries")
     ChatRoomMap.foreach(chatRoom => println(chatRoom._1, chatRoom._2.usernameList, chatRoom._2.chatRoomActor.path))
+  }
+
+  def printConnectionMap(): Unit = {
+    val size = ConnectionMap.size
+    println(s"ConnectionMap: $size entries")
+    ConnectionMap.foreach(connection => println(connection._1))
   }
 }

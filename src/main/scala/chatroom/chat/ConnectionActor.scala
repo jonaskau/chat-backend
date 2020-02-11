@@ -29,6 +29,7 @@ class ConnectionActor extends Actor{
       userActors += accountConnectionNumber -> userActor
       chatRoomActors.values.foreach(_ ! UserOnline(username, accountConnectionNumber, userActor))
     case SendUserOffline(username, accountConnectionNumber) =>
+      userActors -= accountConnectionNumber
       chatRoomActors.values.foreach(_ ! UserOffline(username, accountConnectionNumber))
       if (userActors.isEmpty) {
         ChatRoomsAndConnections.removeConnection(username)

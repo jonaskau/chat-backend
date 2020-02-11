@@ -13,7 +13,7 @@ object Message {
 case class Message(_id: ObjectId, chatId: ObjectId, date: Long, author: String, message: String)
 
 object MessagesActor {
-  case class GetMessages(chatId: ObjectId, amount: Int, untilDate: Long)
+  case class GetMessages(chatId: ObjectId, amount: Int, olderThanDate: Long)
   case class InsertMessage(chatId: ObjectId, author: String, message: String)
 }
 class MessagesActor extends Actor {
@@ -27,10 +27,10 @@ class MessagesActor extends Actor {
   override def receive: Receive = receiveMethod(FutureHandlerBlocking)
 
   def receiveMethod(futureHandler: FutureHandler): Receive = {
-    case GetMessages(chatId, amount, untilDate) =>
+    case GetMessages(chatId, amount, olderThanDate) =>
       val senderRef = sender()
       val messagesFuture = messagesCollection
-        .find(and(equal("chatId", chatId), lt("date", untilDate)))
+        .find(and(equal("chatId", chatId), lt("date", olderThanDate)))
         .sort(descending("date"))
         .limit(amount)
         .toFuture()

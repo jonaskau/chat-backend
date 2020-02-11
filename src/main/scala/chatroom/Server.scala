@@ -27,7 +27,7 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   implicit val UsersToChatRequestFormat: RootJsonFormat[UsersToChatRequest] =
     jsonFormat2(UsersToChatRequest)
 
-  case class GetMessagesRequest(chatId: String, amount: Int, untilDate: Long)
+  case class GetMessagesRequest(chatId: String, amount: Int, olderThanDate: Long)
   implicit  val GetMessageRequestFormat: RootJsonFormat[GetMessagesRequest] =
     jsonFormat3(GetMessagesRequest)
 
@@ -39,17 +39,17 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   implicit val futureHandlingConfigurationFormat: RootJsonFormat[FutureHandlingConfiguration] =
     jsonFormat3(FutureHandlingConfiguration)
 
-  case class ChatsResponse(id: String, name: String, users: List[String], messages: List[String])
+  case class ChatsResponse(id: String, name: String, users: List[String])
   implicit val chatsResponseFormat: RootJsonFormat[ChatsResponse] =
-    jsonFormat4(ChatsResponse)
+    jsonFormat3(ChatsResponse)
 
   case class ChatNameResponse(chatName: String)
   implicit val chatNameResponseFormat: RootJsonFormat[ChatNameResponse] =
     jsonFormat1(ChatNameResponse)
 
-  case class TokenResponse(token: String, expiresIn: Int)
+  case class TokenResponse(token: String, username: String, expiresIn: Int)
   implicit val tokenResponseFormat: RootJsonFormat[TokenResponse] =
-    jsonFormat2(TokenResponse)
+    jsonFormat3(TokenResponse)
 
   case class UsernameAvailableResponse(available: Boolean)
   implicit val usernameAvailableResponseFormat: RootJsonFormat[UsernameAvailableResponse] =
@@ -82,7 +82,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
           val tokenOptionFuture = AuthorizationService.signUp(username, password, DatabaseService.usersActor)
           onSuccess(tokenOptionFuture) {
             case Some(token) =>
-              complete(TokenResponse(token, AuthorizationService.expirationPeriodInMinutes))
+              complete(TokenResponse(token, username, AuthorizationService.expirationPeriodInMinutes))
             case _ => complete(StatusCodes.Conflict)
           }
         case _ => complete(StatusCodes.BadRequest)
@@ -96,7 +96,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
           val tokenOptionFuture = AuthorizationService.login(username, password, DatabaseService.usersActor)
           onSuccess(tokenOptionFuture) {
             case Some(token) =>
-              complete(TokenResponse(token, AuthorizationService.expirationPeriodInMinutes))
+              complete(TokenResponse(token, username, AuthorizationService.expirationPeriodInMinutes))
             case _ => complete(StatusCodes.Unauthorized)
           }
         case _ => complete(StatusCodes.Unauthorized)
@@ -117,7 +117,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
               onSuccess(insertedFuture) {
                 case true =>
                   ChatRoomsAndConnections.insertChatRoom(chat)
-                  complete(StatusCodes.Created)
+                  complete(StatusCodes.NoContent)
                 case _ => complete(StatusCodes.InternalServerError)
               }
             }
@@ -180,7 +180,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
         val chatsFuture = (DatabaseService.chatsActor ? GetChatsForUsername(username))
           .mapTo[List[Chat]]
           .map(_.map(chat => {
-            ChatsResponse(chat._id.toHexString, chat.name, chat.users, List.empty[String])
+            ChatsResponse(chat._id.toHexString, chat.name, chat.users)
           }))
         complete(chatsFuture)
       }
@@ -190,11 +190,11 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
     (path("messages" / "getBatch") & post) {
       AuthorizationService.authenticate() { (username, _, _) =>
         entity(as[GetMessagesRequest]) {
-          case GetMessagesRequest(chatId, amount, untilDate) =>
+          case GetMessagesRequest(chatId, amount, olderThanDate) =>
             if (!ChatRoomsAndConnections.chatRoomContainsUsername(chatId, username)) {
               complete(StatusCodes.Unauthorized)
             }
-            val messageListFuture = (DatabaseService.messagesActor ? GetMessages(new ObjectId(chatId), amount, untilDate))
+            val messageListFuture = (DatabaseService.messagesActor ? GetMessages(new ObjectId(chatId), amount, olderThanDate))
               .mapTo[List[Message]]
               .map(_.map(message => {
                 ChatMessagesResponse(message.date, message.author, message.message)
