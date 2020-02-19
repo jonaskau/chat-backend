@@ -34,7 +34,9 @@ class UsersActor extends Actor{
     case GetUsersByPrefix(usernamePrefix) =>
       val senderRef = sender()
       val usersFuture = usersCollection.find(regex("username", usernamePrefix)).toFuture()
-      futureHandler.GetSeq[User](usersFuture, senderRef ! _)
+      futureHandler.GetSeq[User](usersFuture, users => {
+        senderRef ! users.filter(_.username != "admin")
+      })
     case ExtractActualUsernames(usernameList) =>
       val senderRef = sender()
       val usersFuture = usersCollection.find(in("username", usernameList:_*)).toFuture()

@@ -14,6 +14,18 @@ object ConnectionJsonProtocol extends DefaultJsonProtocol {
   import chatroom.chat.ChatRoomActor.OutgoingMessage
   implicit val OutgoingMessageFormat: RootJsonFormat[OutgoingMessage] =
     jsonFormat3(OutgoingMessage)
+
+  import chatroom.chat.ChatRoomActor.OutgoingEvent
+  implicit val OutgoingEventFormat: RootJsonFormat[OutgoingEvent] =
+    jsonFormat5(OutgoingEvent)
+
+  import chatroom.chat.ChatRoomActor.OutgoingUserOnlineList
+  implicit val OutgoingUserOnlineListFormat: RootJsonFormat[OutgoingUserOnlineList] =
+    jsonFormat2(OutgoingUserOnlineList)
+
+  import chatroom.chat.ChatRoomActor.OutgoingChatNameAndUserList
+  implicit val OutgoingChatNameAndUserListFormat: RootJsonFormat[OutgoingChatNameAndUserList] =
+    jsonFormat3(OutgoingChatNameAndUserList)
 }
 
 object Connection {
@@ -31,7 +43,7 @@ class Connection(val username: String, actorSystem: ActorSystem) {
 
   def websocketFlow(): Flow[Message, Message, _] = {
     accountConnectionNumber += 1
-    Flow.fromGraph(GraphDSL.create(Source.actorRef[OutgoingMessage](bufferSize = 5, OverflowStrategy.fail)) {
+    Flow.fromGraph(GraphDSL.create(Source.actorRef[Outgoing](bufferSize = 5, OverflowStrategy.fail)) {
       implicit builder => chatSource =>
         import GraphDSL.Implicits._
 
@@ -41,10 +53,16 @@ class Connection(val username: String, actorSystem: ActorSystem) {
           })
 
         val backToWebsocket = builder.add(
-          Flow[OutgoingMessage].map {
-            om: OutgoingMessage => TextMessage(om.toJson.compactPrint)
-          }
-        )
+          Flow[Outgoing].collect {
+            case message: OutgoingMessage =>
+              TextMessage(message.toJson.compactPrint)
+            case event: OutgoingEvent =>
+              TextMessage(event.toJson.compactPrint)
+            case userOnlineList: OutgoingUserOnlineList =>
+              TextMessage(userOnlineList.toJson.compactPrint)
+            case chatNameAndUserList: OutgoingChatNameAndUserList =>
+              TextMessage(chatNameAndUserList.toJson.compactPrint)
+          })
 
         val actorAsSource = builder.materializedValue.map(actor => SendUserOnline(username, accountConnectionNumber, actor))
 
@@ -65,7 +83,10 @@ class Connection(val username: String, actorSystem: ActorSystem) {
     connectionActor ! AddChatRoomActor(chatId, chatRoomActor)
   }
 
-  def addChatRoomActorAndSendUserOnline(chatId: String, chatRoomActor: ActorRef): Unit = {
-    connectionActor ! AddChatRoomActorAndSendUserOnline(username, chatId, chatRoomActor)
+  def addChatRoomActorAndSendUserOnline(chatId: String,
+                                        chatName: String,
+                                        users: List[String],
+                                        chatRoomActor: ActorRef): Unit = {
+    connectionActor ! AddChatRoomActorAndSendUserOnline(username, chatId, chatName, users, chatRoomActor)
   }
 }

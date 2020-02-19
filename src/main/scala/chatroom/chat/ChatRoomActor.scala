@@ -15,8 +15,18 @@ object ChatRoomActor {
   sealed trait ChatEvent
   case class UserOnline(username: String, accountConnectionNumber: Int, userActor: ActorRef) extends ChatEvent
   case class UserOffline(username: String, accountConnectionNumber: Int) extends ChatEvent
+  case class UsersAdded(newUsers: List[String]) extends ChatEvent
   case class IncomingMessage(sender: String, message: String) extends ChatEvent
-  case class OutgoingMessage(chatId: String, author: String, message: String)
+
+  sealed trait Outgoing
+  case class OutgoingMessage(chatId: String, author: String, message: String) extends Outgoing
+  case class OutgoingEvent(chatId: String,
+                           username: String,
+                           userOnline: Boolean,
+                           userOffline: Boolean,
+                           userAdded: Boolean) extends Outgoing
+  case class OutgoingUserOnlineList(chatId: String, userOnlineList: List[String]) extends Outgoing
+  case class OutgoingChatNameAndUserList(chatId: String, name: String, users: List[String]) extends Outgoing
 }
 class ChatRoomActor(chatId: String) extends Actor {
   import ChatRoomActor._
@@ -29,30 +39,42 @@ class ChatRoomActor(chatId: String) extends Actor {
     case UserOnline(username, accountConnectionNumber, userActor) =>
       val containsUsernameBefore = containsUsername(username)
       userOnlineMap += (username, accountConnectionNumber) -> userActor
+      userActor ! OutgoingUserOnlineList(chatId, userOnlineMap.keys.map[String](_._1).toList.distinct)
       if (!containsUsernameBefore) {
-        broadcast("System", s"$username: online")
+        broadcastEvent(username, userOnline = true) // I like this default value syntax
       }
     case UserOffline(username, accountConnectionNumber: Int) =>
       userOnlineMap -= ((username, accountConnectionNumber))
       if (!containsUsername(username)) {
-        broadcast("System", s"$username: offline")
+        broadcastEvent(username, userOffline = true)
       }
+    case UsersAdded(newUsers) =>
+      newUsers.foreach(username => broadcastEvent(username, userAdded = true))
     case IncomingMessage(sender, message) =>
-      saveAndSendMessage(sender, message)
+      saveAndBroadcastMessage(sender, message)
   }
 
-  def saveAndSendMessage(sender: String, message: String): Unit = {
+  def saveAndBroadcastMessage(sender: String, message: String): Unit = {
     val insertedFuture = (DatabaseService.messagesActor ? InsertMessage(new ObjectId(chatId), sender, message)).mapTo[Boolean]
     insertedFuture.onComplete {
       case Success(inserted) =>
-        if (inserted) broadcast(sender, message)
-        else println("couldnt save message to DB")
+        if (inserted)
+          broadcast(OutgoingMessage(chatId, sender, message))
+        else
+          println("couldnt save message to DB")
       case Failure(_) => println("couldnt save message to DB")
     }
   }
 
-  def broadcast(sender: String, message: String): Unit = {
-    userOnlineMap.values.foreach(_ ! OutgoingMessage(chatId, sender, message))
+  def broadcastEvent(username: String,
+                     userOnline: Boolean = false,
+                     userOffline: Boolean = false,
+                     userAdded: Boolean = false): Unit = {
+    broadcast(OutgoingEvent(chatId, username, userOnline, userOffline, userAdded))
+  }
+
+  def broadcast(outgoing: Outgoing): Unit = {
+    userOnlineMap.values.foreach(_ ! outgoing)
   }
 
   def containsUsername(username: String): Boolean = {

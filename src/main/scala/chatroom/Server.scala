@@ -138,8 +138,8 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
               val updatedFuture = (DatabaseService.chatsActor ? AddUsersToChat(username, new ObjectId(chatId), actualUsernames: List[String])).mapTo[Boolean]
               onSuccess(updatedFuture) {
                 case true =>
-                  ChatRoomsAndConnections.addUsersToChatRoom(chatId, users)
-                  complete(StatusCodes.OK)
+                  val newUsers = ChatRoomsAndConnections.addUsersToChatRoom(chatId, users)
+                  complete(newUsers)
                 case _ => complete(StatusCodes.Unauthorized)
               }
             }
@@ -147,6 +147,19 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
         }
       }
     }
+
+  /*val getOnlineUsers =
+    (pathPrefix("chats" / "getOnlineUsers") & get) {
+      AuthorizationService.authenticate() { (username, _, _) =>
+        (path(Segment) | parameter('chatId)) { chatId =>
+          if (!ChatRoomsAndConnections.chatRoomContainsUsername(chatId, username)) {
+            complete(StatusCodes.Unauthorized)
+          }
+          val userOnlineListFuture = ChatRoomsAndConnections.GetOnlineUsers(chatId)
+          complete(userOnlineListFuture)
+        }
+      }
+    }*/
 
   val getUsernamesByPrefix =
     (pathPrefix("users" / "getUsernamesByPrefix") & get) {
@@ -218,6 +231,19 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
+  val getChatById =
+    (pathPrefix("chats") & get) {
+      AuthorizationService.authenticate() { (username, _, _) =>
+        (path(Segment) | parameter('id)) { chatId =>
+          val chatTuple = ChatRoomsAndConnections.GetChatByIdIfUsernameIsInside(chatId, username)
+          if (chatTuple != null)
+            complete(ChatsResponse(chatId, chatTuple._1, chatTuple._2))
+          else
+            complete(StatusCodes.Unauthorized)
+        }
+      }
+    }
+
   val setFutureHandlingConfiguration =
     (path("setFutureHandlingConfiguration") & post) {
       AuthorizationService.authenticate() { (_, scope, _) =>
@@ -253,18 +279,20 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
         addNewChat ~
         addUsersToChat ~
         getUsernamesByPrefix ~
+        //getOnlineUsers ~
         usernameAvailable ~
         getMessages ~
         getChats ~
         getChatNameById ~
+        getChatById ~
         setFutureHandlingConfiguration ~
         createWSConnection
       }
     }
   val bindingFuture = Http().bindAndHandle(route, interface, port)
-  println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
-  StdIn.readLine() // let it run until user presses return
+  println(s"Server online at http://$interface:$port/\nPress RETURN to stop...")
+  StdIn.readLine()
   bindingFuture
-    .flatMap(_.unbind()) // trigger unbinding from the port
+    .flatMap(_.unbind())
     .onComplete(_ => sys.exit())
 }

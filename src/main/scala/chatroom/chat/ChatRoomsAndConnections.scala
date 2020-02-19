@@ -7,12 +7,13 @@ import akka.pattern.ask
 import akka.util.Timeout
 import chatroom.database.Chat
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 
 object ChatRoomsAndConnections {
   import chatroom.database.ChatsActor._
+  import ChatRoomActor._
 
   implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
 
@@ -46,6 +47,10 @@ object ChatRoomsAndConnections {
     connection
   }
 
+  /*def GetOnlineUsers(chatId: String): Future[List[String]] = {
+    (ChatRoomMap(chatId).chatRoomActor ? GetOnlineUser).mapTo[List[String]]
+  }*/
+
   def GetChatNameById(chatId: String): String = {
     ChatRoomMap(chatId).name
   }
@@ -61,29 +66,46 @@ object ChatRoomsAndConnections {
       null
   }
 
+  def GetChatByIdIfUsernameIsInside(chatId: String, username: String): (String, List[String]) = {
+    if (chatRoomContainsUsername(chatId, username))
+      (ChatRoomMap(chatId).name, ChatRoomMap(chatId).usernameList)
+    else
+      null
+  }
+
   def removeConnection(username: String): Unit = {
     ConnectionMap -= username
-    printConnectionMap()
   }
 
   def insertChatRoom(chat: Chat)(implicit actorSystem: ActorSystem): Unit = {
     val chatRoomActor = actorSystem.actorOf(Props(new ChatRoomActor(chat._id.toHexString)), chat._id.toHexString)
     ChatRoomMap += chat._id.toHexString -> ChatRoom(chat.name, chat.users, chatRoomActor)
-    addChatRoomActorsToConnections(chat.users, chat._id.toHexString, chatRoomActor)
+    addChatRoomActorToConnections(chat.users, chat._id.toHexString, chat.name, chat.users, chatRoomActor)
     printChatRoomList()
   }
 
-  def addUsersToChatRoom(chatId: String, users: List[String]): Unit = {
+  def addUsersToChatRoom(chatId: String, users: List[String]): List[String] = {
     val newUsers = users.diff(ChatRoomMap(chatId).usernameList)
     ChatRoomMap(chatId).usernameList ++= newUsers
-    addChatRoomActorsToConnections(newUsers, chatId, ChatRoomMap(chatId).chatRoomActor)
+    ChatRoomMap(chatId).chatRoomActor ! UsersAdded(newUsers)
+    addChatRoomActorToConnections(
+      newUsers,
+      chatId,
+      ChatRoomMap(chatId).name,
+      ChatRoomMap(chatId).usernameList,
+      ChatRoomMap(chatId).chatRoomActor)
     printChatRoomList()
+    newUsers
   }
 
-  def addChatRoomActorsToConnections(newUsers: List[String], chatId: String, chatRoomActor: ActorRef): Unit = {
+  def addChatRoomActorToConnections(newUsers: List[String],
+                                    chatId: String,
+                                    chatName: String,
+                                    chatUsers: List[String],
+                                    chatRoomActor: ActorRef): Unit = {
     newUsers.foreach(username => {
       if (ConnectionMap.contains(username)) {
-        ConnectionMap(username).addChatRoomActorAndSendUserOnline(chatId, chatRoomActor)
+        ConnectionMap(username).addChatRoomActorAndSendUserOnline(chatId, chatName, chatUsers, chatRoomActor)
       }
     })
   }
