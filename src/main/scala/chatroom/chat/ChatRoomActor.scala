@@ -25,10 +25,9 @@ object ChatRoomActor {
                            userOnline: Boolean,
                            userOffline: Boolean,
                            userAdded: Boolean) extends Outgoing
-  case class OutgoingUserOnlineList(chatId: String, userOnlineList: List[String]) extends Outgoing
-  case class OutgoingChatNameAndUserList(chatId: String, name: String, users: List[String]) extends Outgoing
+  case class OutgoingChat(chatId: String, chatName: String, users: List[String], userOnlineList: List[String]) extends Outgoing
 }
-class ChatRoomActor(chatId: String) extends Actor {
+class ChatRoomActor(chatId: String, chatName: String, var userList: List[String]) extends Actor {
   import ChatRoomActor._
   import scala.concurrent.ExecutionContext.Implicits.global
   implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
@@ -39,7 +38,7 @@ class ChatRoomActor(chatId: String) extends Actor {
     case UserOnline(username, accountConnectionNumber, userActor) =>
       val containsUsernameBefore = containsUsername(username)
       userOnlineMap += (username, accountConnectionNumber) -> userActor
-      userActor ! OutgoingUserOnlineList(chatId, userOnlineMap.keys.map[String](_._1).toList.distinct)
+      userActor ! OutgoingChat(chatId, chatName, userList, userOnlineMap.keys.map[String](_._1).toList.distinct)
       if (!containsUsernameBefore) {
         broadcastEvent(username, userOnline = true) // I like this default value syntax
       }
@@ -49,6 +48,7 @@ class ChatRoomActor(chatId: String) extends Actor {
         broadcastEvent(username, userOffline = true)
       }
     case UsersAdded(newUsers) =>
+      userList ++= newUsers
       newUsers.foreach(username => broadcastEvent(username, userAdded = true))
     case IncomingMessage(sender, message) =>
       saveAndBroadcastMessage(sender, message)

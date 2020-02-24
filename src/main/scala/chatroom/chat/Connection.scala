@@ -19,13 +19,9 @@ object ConnectionJsonProtocol extends DefaultJsonProtocol {
   implicit val OutgoingEventFormat: RootJsonFormat[OutgoingEvent] =
     jsonFormat5(OutgoingEvent)
 
-  import chatroom.chat.ChatRoomActor.OutgoingUserOnlineList
-  implicit val OutgoingUserOnlineListFormat: RootJsonFormat[OutgoingUserOnlineList] =
-    jsonFormat2(OutgoingUserOnlineList)
-
-  import chatroom.chat.ChatRoomActor.OutgoingChatNameAndUserList
-  implicit val OutgoingChatNameAndUserListFormat: RootJsonFormat[OutgoingChatNameAndUserList] =
-    jsonFormat3(OutgoingChatNameAndUserList)
+  import chatroom.chat.ChatRoomActor.OutgoingChat
+  implicit val OutgoingUserOnlineListFormat: RootJsonFormat[OutgoingChat] =
+    jsonFormat4(OutgoingChat)
 }
 
 object Connection {
@@ -58,10 +54,8 @@ class Connection(val username: String, actorSystem: ActorSystem) {
               TextMessage(message.toJson.compactPrint)
             case event: OutgoingEvent =>
               TextMessage(event.toJson.compactPrint)
-            case userOnlineList: OutgoingUserOnlineList =>
-              TextMessage(userOnlineList.toJson.compactPrint)
-            case chatNameAndUserList: OutgoingChatNameAndUserList =>
-              TextMessage(chatNameAndUserList.toJson.compactPrint)
+            case chat: OutgoingChat =>
+              TextMessage(chat.toJson.compactPrint)
           })
 
         val actorAsSource = builder.materializedValue.map(actor => SendUserOnline(username, accountConnectionNumber, actor))
@@ -83,10 +77,7 @@ class Connection(val username: String, actorSystem: ActorSystem) {
     connectionActor ! AddChatRoomActor(chatId, chatRoomActor)
   }
 
-  def addChatRoomActorAndSendUserOnline(chatId: String,
-                                        chatName: String,
-                                        users: List[String],
-                                        chatRoomActor: ActorRef): Unit = {
-    connectionActor ! AddChatRoomActorAndSendUserOnline(username, chatId, chatName, users, chatRoomActor)
+  def addChatRoomActorAndSendUserOnline(chatId: String, chatRoomActor: ActorRef): Unit = {
+    connectionActor ! AddChatRoomActorAndSendUserOnline(username, chatId, chatRoomActor)
   }
 }

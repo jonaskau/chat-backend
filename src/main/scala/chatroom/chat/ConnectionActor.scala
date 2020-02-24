@@ -5,11 +5,7 @@ import akka.actor.{Actor, ActorRef, PoisonPill}
 object ConnectionActor {
   sealed trait ConnectionEvent
   case class AddChatRoomActor(chatId: String, chatRoomActor: ActorRef) extends ConnectionEvent
-  case class AddChatRoomActorAndSendUserOnline(username: String,
-                                               chatId: String,
-                                               chatName: String,
-                                               users: List[String],
-                                               chatRoomActor: ActorRef) extends ConnectionEvent
+  case class AddChatRoomActorAndSendUserOnline(username: String, chatId: String, chatRoomActor: ActorRef) extends ConnectionEvent
   case class SendUserOnline(username: String, accountConnectionNumber: Int, userActor: ActorRef) extends ConnectionEvent
   case class SendUserOffline(username: String, accountConnectionNumber: Int) extends ConnectionEvent
   case class SendIncomingMessage(chatId: String, author: String, message: String) extends ConnectionEvent
@@ -24,10 +20,9 @@ class ConnectionActor extends Actor{
   override def receive: Receive = {
     case AddChatRoomActor(chatId, chatRoomActor) =>
       chatRoomActors += chatId -> chatRoomActor
-    case AddChatRoomActorAndSendUserOnline(username, chatId, chatName, users, chatRoomActor) =>
+    case AddChatRoomActorAndSendUserOnline(username, chatId, chatRoomActor) =>
       chatRoomActors += chatId -> chatRoomActor
       userActors.foreach(userActor => {
-        userActor._2 ! OutgoingChatNameAndUserList(chatId, chatName, users)
         chatRoomActors(chatId) ! UserOnline(username, userActor._1, userActor._2)
       })
     case SendUserOnline(username, accountConnectionNumber, userActor) =>

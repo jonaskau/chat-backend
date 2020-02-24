@@ -39,13 +39,13 @@ trait CustomJsonProtocol extends DefaultJsonProtocol {
   implicit val futureHandlingConfigurationFormat: RootJsonFormat[FutureHandlingConfiguration] =
     jsonFormat3(FutureHandlingConfiguration)
 
-  case class ChatsResponse(id: String, name: String, users: List[String])
+  /*case class ChatsResponse(id: String, name: String, users: List[String])
   implicit val chatsResponseFormat: RootJsonFormat[ChatsResponse] =
     jsonFormat3(ChatsResponse)
 
   case class ChatNameResponse(chatName: String)
   implicit val chatNameResponseFormat: RootJsonFormat[ChatNameResponse] =
-    jsonFormat1(ChatNameResponse)
+    jsonFormat1(ChatNameResponse)*/
 
   case class TokenResponse(token: String, username: String, expiresIn: Int)
   implicit val tokenResponseFormat: RootJsonFormat[TokenResponse] =
@@ -148,19 +148,6 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
-  /*val getOnlineUsers =
-    (pathPrefix("chats" / "getOnlineUsers") & get) {
-      AuthorizationService.authenticate() { (username, _, _) =>
-        (path(Segment) | parameter('chatId)) { chatId =>
-          if (!ChatRoomsAndConnections.chatRoomContainsUsername(chatId, username)) {
-            complete(StatusCodes.Unauthorized)
-          }
-          val userOnlineListFuture = ChatRoomsAndConnections.GetOnlineUsers(chatId)
-          complete(userOnlineListFuture)
-        }
-      }
-    }*/
-
   val getUsernamesByPrefix =
     (pathPrefix("users" / "getUsernamesByPrefix") & get) {
       AuthorizationService.authenticate() { (_, _, _) =>
@@ -187,18 +174,6 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
-  val getChats =
-    (path("chats") & get) {
-      AuthorizationService.authenticate() { (username, _, _) =>
-        val chatsFuture = (DatabaseService.chatsActor ? GetChatsForUsername(username))
-          .mapTo[List[Chat]]
-          .map(_.map(chat => {
-            ChatsResponse(chat._id.toHexString, chat.name, chat.users)
-          }))
-        complete(chatsFuture)
-      }
-    }
-
   val getMessages =
     (path("messages" / "getBatch") & post) {
       AuthorizationService.authenticate() { (username, _, _) =>
@@ -218,7 +193,19 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
       }
     }
 
-  val getChatNameById =
+  /*val getChats =
+  (path("chats") & get) {
+    AuthorizationService.authenticate() { (username, _, _) =>
+      val chatsFuture = (DatabaseService.chatsActor ? GetChatsForUsername(username))
+        .mapTo[List[Chat]]
+        .map(_.map(chat => {
+          ChatsResponse(chat._id.toHexString, chat.name, chat.users)
+        }))
+      complete(chatsFuture)
+    }
+  }*/
+
+  /*val getChatNameById =
     (pathPrefix("chats" / "getChatNameById") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
         (path(Segment) | parameter('id)) { chatId =>
@@ -229,9 +216,9 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
             complete(StatusCodes.Unauthorized)
         }
       }
-    }
+    }*/
 
-  val getChatById =
+  /*val getChatById =
     (pathPrefix("chats") & get) {
       AuthorizationService.authenticate() { (username, _, _) =>
         (path(Segment) | parameter('id)) { chatId =>
@@ -242,7 +229,20 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
             complete(StatusCodes.Unauthorized)
         }
       }
+    }*/
+
+  /*val getOnlineUsers =
+  (pathPrefix("chats" / "getOnlineUsers") & get) {
+    AuthorizationService.authenticate() { (username, _, _) =>
+      (path(Segment) | parameter('chatId)) { chatId =>
+        if (!ChatRoomsAndConnections.chatRoomContainsUsername(chatId, username)) {
+          complete(StatusCodes.Unauthorized)
+        }
+        val userOnlineListFuture = ChatRoomsAndConnections.GetOnlineUsers(chatId)
+        complete(userOnlineListFuture)
+      }
     }
+  }*/
 
   val setFutureHandlingConfiguration =
     (path("setFutureHandlingConfiguration") & post) {
@@ -279,12 +279,12 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
         addNewChat ~
         addUsersToChat ~
         getUsernamesByPrefix ~
-        //getOnlineUsers ~
         usernameAvailable ~
         getMessages ~
+        /*getOnlineUsers ~
         getChats ~
         getChatNameById ~
-        getChatById ~
+        getChatById ~*/
         setFutureHandlingConfiguration ~
         createWSConnection
       }
