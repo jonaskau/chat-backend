@@ -20,8 +20,12 @@ object ConnectionJsonProtocol extends DefaultJsonProtocol {
     jsonFormat5(OutgoingEvent)
 
   import chatroom.chat.ChatRoomActor.OutgoingChat
-  implicit val OutgoingUserOnlineListFormat: RootJsonFormat[OutgoingChat] =
+  implicit val OutgoingChatFormat: RootJsonFormat[OutgoingChat] =
     jsonFormat4(OutgoingChat)
+
+  import chatroom.chat.ChatRoomActor.OutgoingChatAmount
+  implicit val OutgoingChatAmountFormat: RootJsonFormat[OutgoingChatAmount] =
+    jsonFormat1(OutgoingChatAmount)
 }
 
 object Connection {
@@ -56,6 +60,8 @@ class Connection(val username: String, actorSystem: ActorSystem) {
               TextMessage(event.toJson.compactPrint)
             case chat: OutgoingChat =>
               TextMessage(chat.toJson.compactPrint)
+            case chatAmount: OutgoingChatAmount =>
+              TextMessage(chatAmount.toJson.compactPrint)
           })
 
         val actorAsSource = builder.materializedValue.map(actor => SendUserOnline(username, accountConnectionNumber, actor))

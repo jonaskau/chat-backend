@@ -27,6 +27,7 @@ class ConnectionActor extends Actor{
       })
     case SendUserOnline(username, accountConnectionNumber, userActor) =>
       userActors += accountConnectionNumber -> userActor
+      userActor ! OutgoingChatAmount(chatRoomActors.size)
       chatRoomActors.values.foreach(_ ! UserOnline(username, accountConnectionNumber, userActor))
     case SendUserOffline(username, accountConnectionNumber) =>
       userActors -= accountConnectionNumber

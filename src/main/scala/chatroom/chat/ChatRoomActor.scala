@@ -26,6 +26,7 @@ object ChatRoomActor {
                            userOffline: Boolean,
                            userAdded: Boolean) extends Outgoing
   case class OutgoingChat(chatId: String, chatName: String, users: List[String], userOnlineList: List[String]) extends Outgoing
+  case class OutgoingChatAmount(amount: Int) extends Outgoing
 }
 class ChatRoomActor(chatId: String, chatName: String, var userList: List[String]) extends Actor {
   import ChatRoomActor._
