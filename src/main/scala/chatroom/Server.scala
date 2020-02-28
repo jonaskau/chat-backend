@@ -292,7 +292,7 @@ object Server extends App with CustomJsonProtocol with SprayJsonSupport {
   val bindingFuture = Http().bindAndHandle(route, interface, port)
   println(s"Server online at http://$interface:$port/\nPress RETURN to stop...")
   StdIn.readLine()
-  bindingFuture
+  /*bindingFuture
     .flatMap(_.unbind())
-    .onComplete(_ => sys.exit())
+    .onComplete(_ => sys.exit())*/
 }
