@@ -1,0 +1,44 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: '482ee3f0-5b3b-4087-afdf-022d2ac3eed1'
+  imageRepository: 'jonaschatbackendimage'
+  containerRegistry: 'jonaschat.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+  
+  # Agent VM image name
+  vmImageName: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: Build and push stage
+  jobs:  
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+- task: AzureWebAppContainer@1
+  inputs:
+    azureSubscription: 'Azure für Bildungseinrichtungen(76968ea1-8fd1-4a02-a960-cf9b0c53a9b1)'
+    appName: 'jonas-chat-api'
+    containers: 'jonaschatbackendimage'
