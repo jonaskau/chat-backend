@@ -8,4 +8,4 @@ RUN sbt compile
 
 CMD sbt run
 
-EXPOSE 8080
+EXPOSE 80
