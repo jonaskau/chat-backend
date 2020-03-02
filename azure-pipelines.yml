@@ -11,10 +11,10 @@ resources:
 variables:
   # Container registry service connection established during pipeline creation
   dockerRegistryServiceConnection: '3776f49d-363f-4cd8-b2b5-da96885b3bb8'
-  imageRepository: 'jonas-chat-api:latest'
+  imageRepository: 'jonas-chat-api'
   containerRegistry: 'jonaschat.azurecr.io'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
-  tag: '$(Build.BuildId)'
+  tag: 'latest'
   
   # Agent VM image name
   vmImageName: 'ubuntu-latest'
