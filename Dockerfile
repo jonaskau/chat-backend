@@ -1,17 +1,11 @@
-FROM openjdk:8
+FROM mozilla/sbt:latest
 
-RUN \
-  curl -L -o sbt-1.3.5.deb http://dl.bintray.com/sbt/debian/sbt-1.3.5.deb && \
-  dpkg -i sbt-1.3.5.deb && \
-  rm sbt-1.3.5.deb && \
-  apt-get update && \
-  apt-get install sbt && \
-  sbt sbtVersion
-
-WORKDIR /
+WORKDIR /usr/app
 
 ADD . .
 
-EXPOSE 8080
+RUN sbt compile
 
 CMD sbt run
+
+EXPOSE 8080
