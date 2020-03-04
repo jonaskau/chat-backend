@@ -31,7 +31,7 @@ trait FutureHandler {
 
 object FutureHandlerBlocking extends FutureHandler {
 
-  private val duration = Duration(10, TimeUnit.SECONDS)
+  private val duration = Duration(30, TimeUnit.SECONDS)
 
   override def WriteObject(future: Future[Object], onComplete: Boolean => Unit): Unit = {
     val written = try {

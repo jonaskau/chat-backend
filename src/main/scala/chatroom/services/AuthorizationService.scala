@@ -24,7 +24,7 @@ object AuthorizationService {
   import Directives._
   import chatroom.database.UsersActor._
 
-  implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
+  implicit val defaultTimeout: Timeout = Timeout(30, TimeUnit.SECONDS)
 
   def authenticate(headerName: String = "Access-Token"): Directive[(String, String, String)] = {
     optionalHeaderValueByName(headerName).flatMap {

@@ -31,7 +31,7 @@ object ChatRoomActor {
 class ChatRoomActor(chatId: String, chatName: String, var userList: List[String]) extends Actor {
   import ChatRoomActor._
   import scala.concurrent.ExecutionContext.Implicits.global
-  implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
+  implicit val defaultTimeout: Timeout = Timeout(30, TimeUnit.SECONDS)
 
   var userOnlineMap: Map[(String, Int), ActorRef] = Map.empty[(String, Int), ActorRef]
 

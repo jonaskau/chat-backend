@@ -15,7 +15,7 @@ object ChatRoomsAndConnections {
   import chatroom.database.ChatsActor._
   import ChatRoomActor._
 
-  implicit val defaultTimeout: Timeout = Timeout(10, TimeUnit.SECONDS)
+  implicit val defaultTimeout: Timeout = Timeout(30, TimeUnit.SECONDS)
 
   case class ChatRoom(var usernameList: List[String], chatRoomActor: ActorRef)
 
